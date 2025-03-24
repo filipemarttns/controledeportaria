@@ -448,17 +448,27 @@ class CadastroVeiculoScreen(Screen):
                 ]
                 worksheet.append_row(dados_planilha)
 
-            # Agora, vamos procurar pela combinação de VEÍCULO (placa) e STATUS
             if "concluir" in status_selecionados:  # Verifica se o status é de conclusão
                 time_to_finish = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                # Percorrendo as linhas da planilha para encontrar a linha correta
-                rows = worksheet.get_all_records()  # Pega todas as linhas da planilha
+
+                rows = worksheet.get_all_records()  # Obtém todas as linhas da planilha
+                
                 for i, row in enumerate(rows, start=2):  # Começa de 2 para pular o cabeçalho
-                    # Filtro combinado: VEÍCULO + STATUS + TEMPO DE CONCLUSÃO vazio
-                    if row["VEÍCULO"] == placa and row["STATUS"] == status and row["TEMPO DE CONCLUSÃO DA PENDÊNCIA"] == "":
-                        # Atualiza a célula correta de TEMPO DE CONCLUSÃO DA PENDÊNCIA
-                        worksheet.update_cell(i, 10, time_to_finish)  # Coluna 10 (TEMPO DE CONCLUSÃO DA PENDÊNCIA)
-                        break  # Encontrou a linha correta, não precisa continuar a busca
+                    print(f"Linha {i} -> VEÍCULO: {row['VEÍCULO']}, STATUS: {row['STATUS']}, DATA/HORA: {row['DATA/HORA']}, TEMPO: {row['TEMPO DE CONCLUSÃO DA PENDÊNCIA']}")  # Debug
+                    
+                    # Comparação exata: Veículo, Status e sem Tempo de Conclusão
+                    if (
+                        str(row["VEÍCULO"]).strip() == str(placa).strip() and
+                        str(row["STATUS"]).strip().lower() == str(status).strip().lower() and
+                        str(row["TEMPO DE CONCLUSÃO DA PENDÊNCIA"]).strip() == "" and
+                        str(row["DATA/HORA"]).strip() == str(data_hora).strip()  # Adicionando filtro de DATA/HORA
+                    ):
+                        worksheet.update_cell(i, 10, time_to_finish)  # Atualiza a célula de Tempo de Conclusão
+                        print(f"✅ Atualizando linha {i} com {time_to_finish}")  # Confirmação no log
+                        break  # Sai do loop ao encontrar a linha correta
+
+
+
 
             Clock.schedule_once(lambda dt: Clock.schedule_interval(lambda dt: self.atualizar_lista_veiculos(), 1))  # Atualiza a lista a cada 1 segundo
 
@@ -694,15 +704,25 @@ class VeiculosCadastradosScreen(Screen):
         self.show_popup("Sucesso", f"Veículo {veiculo['placa']} foi marcado como resolvido.")
 
     def atualizar_planilha(self, veiculo):
-        # Acesse a planilha
         sheet = client.open_by_key(keyid).sheet1
+        data = sheet.get_all_values()  # Obtém todas as células como uma matriz
 
-        # Encontre a linha onde o veículo está (por exemplo, pela placa)
-        cell = sheet.find(veiculo['placa'])
+        # Encontrar todas as ocorrências do veículo
+        linhas_corretas = []
+        for i, row in enumerate(data, start=1):  # Começa de 1 pois as linhas começam no índice 1
+            if str(row[2]).strip() == str(veiculo['placa']).strip() and str(row[6]).strip() == str(veiculo['status']).strip():
+                linhas_corretas.append(i)
 
-        # Atualize a coluna "TEMPO DE CONCLUSÃO DA PENDÊNCIA" na coluna J (coluna 10)
-        column_index = 10  # A coluna J é a décima coluna (índice 10)
-        sheet.update_cell(cell.row, column_index, veiculo['tempo_execucao'])
+        if not linhas_corretas:
+            print(f"⚠️ Veículo {veiculo['placa']} não encontrado na planilha.")
+            return
+
+        # Atualiza apenas a última ocorrência encontrada (a mais recente)
+        ultima_linha = max(linhas_corretas)
+        sheet.update_cell(ultima_linha, 10, veiculo['tempo_execucao'])  # Coluna J (índice 10)
+
+        print(f"✅ Tempo de execução atualizado na linha {ultima_linha} para {veiculo['placa']}.")
+
 
     def show_popup(self, title, message):
         popup = Popup(
