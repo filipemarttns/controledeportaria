@@ -467,11 +467,6 @@ class CadastroVeiculoScreen(Screen):
                         print(f"✅ Atualizando linha {i} com {time_to_finish}")  # Confirmação no log
                         break  # Sai do loop ao encontrar a linha correta
 
-
-
-
-            Clock.schedule_once(lambda dt: Clock.schedule_interval(lambda dt: self.atualizar_lista_veiculos(), 1))  # Atualiza a lista a cada 1 segundo
-
             self.show_popup("Cadastro bem-sucedido", f"Veículo {placa} cadastrado com sucesso!")
             self.manager.current = 'veiculos'
             self.limpar_campos()
@@ -590,7 +585,7 @@ class VeiculosCadastradosScreen(Screen):
 
         for doc in veiculos_ref:
             veiculo = doc.to_dict()
-            veiculo['id'] = doc.id  # Adiciona o ID do documento no dicionário 'veiculo'
+            veiculo['id'] = doc.id 
 
             cor_fundo = (1, 0, 0, 1)
             if veiculo['status'] == "Está OK":
@@ -620,8 +615,62 @@ class VeiculosCadastradosScreen(Screen):
             self.scroll_content.add_widget(veiculo_button)
 
     def atualizar_lista_veiculos_em_tempo_real(self, snapshot, changes, read_time):
-        # Atualiza a lista de veículos sempre que houver uma mudança no Firestore
-        Clock.schedule_once(lambda dt: self.atualizar_lista_veiculos())
+        for change in changes:
+            if change.type in ['ADDED', 'MODIFIED']:
+                veiculo = change.document.to_dict()
+                veiculo['id'] = change.document.id
+                self.atualizar_veiculo_na_lista(veiculo)
+
+    def atualizar_veiculo_na_lista(self, veiculo):
+
+        for button in self.veiculo_buttons:
+            if button.text.startswith(veiculo['placa']):
+
+                cor_fundo = (1, 0, 0, 1)
+                if veiculo['status'] == "Está OK":
+                    cor_fundo = (0, 1, 0, 1)
+                elif veiculo['urgencia'] == "Alta":
+                    cor_fundo = (1, 0, 0, 1)
+                elif veiculo['urgencia'] == "Média":
+                    cor_fundo = (1, 0.647, 0, 1)
+                elif veiculo['urgencia'] == "Baixa":
+                    cor_fundo = (1, 1, 0, 1)
+
+                if veiculo.get('resolvido_por'):
+                    cor_fundo = (0, 1, 0, 1)
+
+                button.background_color = cor_fundo
+                button.text = f"{veiculo['placa']} - {veiculo['status']}"
+                break
+        else:
+
+            cor_fundo = (1, 0, 0, 1)
+            if veiculo['status'] == "Está OK":
+                cor_fundo = (0, 1, 0, 1)
+            elif veiculo['urgencia'] == "Alta":
+                cor_fundo = (1, 0, 0, 1)
+            elif veiculo['urgencia'] == "Média":
+                cor_fundo = (1, 0.647, 0, 1)
+            elif veiculo['urgencia'] == "Baixa":
+                cor_fundo = (1, 1, 0, 1)
+
+            if veiculo.get('resolvido_por'):
+                cor_fundo = (0, 1, 0, 1)
+
+            veiculo_button = Button(
+                text=f"{veiculo['placa']} - {veiculo['status']}",
+                size_hint=(None, None),
+                size=(300, 35),
+                pos_hint={"center_x": 0.5}
+            )
+            veiculo_button.background_normal = ''
+            veiculo_button.background_color = cor_fundo
+            veiculo_button.color = (0, 0, 0, 1)
+            veiculo_button.bind(
+                on_press=lambda instance, veiculo=veiculo, veiculo_button=veiculo_button: self.exibir_informacoes(veiculo, veiculo_button)
+            )
+            self.scroll_content.add_widget(veiculo_button)
+            self.veiculo_buttons.append(veiculo_button)
 
     def exibir_informacoes(self, veiculo, veiculo_button):
         info_text = f"Veículo: {veiculo['placa']}\nStatus: {veiculo['status']}\nObservações: {veiculo['observacoes']}\nUrgência: {veiculo['urgencia']}\nData e Hora do Cadastro: {veiculo['data_hora']}\n"
@@ -690,14 +739,12 @@ class VeiculosCadastradosScreen(Screen):
         veiculo['resolvido_por'] = "Funcionário"
         veiculo_button.background_color = (0, 1, 0, 1)
 
-        # Atualiza o documento no Firebase usando o ID que foi adicionado ao dicionário
         veiculo_ref = db.collection('veiculos').document(veiculo['id'])
         veiculo_ref.update({
             'resolvido_por': veiculo['resolvido_por'],
             'tempo_execucao': veiculo['tempo_execucao']
         })
 
-        # Atualiza o Google Sheets
         self.atualizar_planilha(veiculo)
 
         popup.dismiss()
@@ -705,11 +752,10 @@ class VeiculosCadastradosScreen(Screen):
 
     def atualizar_planilha(self, veiculo):
         sheet = client.open_by_key(keyid).sheet1
-        data = sheet.get_all_values()  # Obtém todas as células como uma matriz
+        data = sheet.get_all_values()  
 
-        # Encontrar todas as ocorrências do veículo
         linhas_corretas = []
-        for i, row in enumerate(data, start=1):  # Começa de 1 pois as linhas começam no índice 1
+        for i, row in enumerate(data, start=1):
             if str(row[2]).strip() == str(veiculo['placa']).strip() and str(row[6]).strip() == str(veiculo['status']).strip():
                 linhas_corretas.append(i)
 
@@ -717,12 +763,10 @@ class VeiculosCadastradosScreen(Screen):
             print(f"⚠️ Veículo {veiculo['placa']} não encontrado na planilha.")
             return
 
-        # Atualiza apenas a última ocorrência encontrada (a mais recente)
         ultima_linha = max(linhas_corretas)
-        sheet.update_cell(ultima_linha, 10, veiculo['tempo_execucao'])  # Coluna J (índice 10)
+        sheet.update_cell(ultima_linha, 10, veiculo['tempo_execucao']) 
 
         print(f"✅ Tempo de execução atualizado na linha {ultima_linha} para {veiculo['placa']}.")
-
 
     def show_popup(self, title, message):
         popup = Popup(
@@ -738,11 +782,11 @@ class VeiculosCadastradosScreen(Screen):
         self.manager.current = "inicio"
 
     def on_leave(self, *args):
-        # Remove o listener quando a tela for deixada
+
         if self.listener:
-            # Correção: use o método de cancelamento adequado, que no caso do Firestore é 'unsubscribe'
+
             if hasattr(self.listener, 'remove'):
-                self.listener.remove()  # Cancela o listener
+                self.listener.remove() 
 
         
 class VeiculoApp(App):
@@ -785,7 +829,7 @@ class VeiculoApp(App):
 
     def exibir_veiculos(self, dt):
         veiculos_screen = self.root.get_screen('veiculos')
-        
+
         Clock.schedule_once(lambda dt: self._exibir_veiculos(veiculos_screen), 0)
 
     def _exibir_veiculos(self, veiculos_screen):
