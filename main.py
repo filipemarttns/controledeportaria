@@ -17,19 +17,24 @@ from kivy.core.window import Window
 from kivy.uix.checkbox import CheckBox
 from datetime import datetime
 import csv
+import os
 import firebase_admin
 from firebase_admin import credentials, firestore
 from kivy.clock import Clock
 from kivy.lang import Builder
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from config import sheetshttps, googleapis, idsheet, keyid
+from dotenv import load_dotenv
 
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+print(os.getcwd())  # Verifique o diretório atual
+
+scope = [sheetshttps, googleapis]
 creds = ServiceAccountCredentials.from_json_keyfile_name("google_sheets_cred.json", scope)
 client = gspread.authorize(creds)
 
 # Usando o ID da planilha para abrir a planilha
-sheet_id = "1swaaCap5FE0Nc7NIV1miu-C19Zx7c6v0fpG-6gDm64k"
+sheet_id = idsheet
 worksheet = client.open_by_key(sheet_id).worksheet("GERAL")
 
 # Inicializando o Firebase
@@ -690,7 +695,7 @@ class VeiculosCadastradosScreen(Screen):
 
     def atualizar_planilha(self, veiculo):
         # Acesse a planilha
-        sheet = client.open_by_key("1swaaCap5FE0Nc7NIV1miu-C19Zx7c6v0fpG-6gDm64k").sheet1
+        sheet = client.open_by_key(keyid).sheet1
 
         # Encontre a linha onde o veículo está (por exemplo, pela placa)
         cell = sheet.find(veiculo['placa'])
